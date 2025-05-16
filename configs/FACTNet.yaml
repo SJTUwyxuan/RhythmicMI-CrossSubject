@@ -1,0 +1,30 @@
+# configs/FACTNet.yaml
+model:
+  name: FACTNet
+  params:
+    nChan: 32
+    nTime: 640
+    nClass: 4
+
+data:
+  data_root: "D:/14-AORIonline/DataSet"
+  session: 1
+  channels_sel: [9,10,11,12,13,14,17,18,19,20,21,22,
+                 44,45,46,49,50,51,54,55,56,57,58,59,25,26,30,63,62,27,29,64]
+  highpass: 0.5
+  lowpass: 5.0
+  filter_order: 4
+
+training:
+  epochs: 100
+  batch_size: 256
+  val_n_subjects: 9
+  patience: 5
+
+  optimizer:
+    name: "Adam"
+    params:
+      lr: 0.001
+      weight_decay: 0.001
+
+device: "cuda" 
