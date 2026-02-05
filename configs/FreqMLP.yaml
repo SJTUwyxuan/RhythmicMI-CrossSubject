@@ -1,0 +1,60 @@
+# configs/FreqMLP.yaml
+model:
+  name: FreqMLP
+  params:
+    C: 32
+    T: 640
+    N: 4
+    fs: 128
+    freq_range: [0.5, 5]
+    dropout: 0.5
+
+    use_imag: true
+    use_chancomb: true
+    head_type: "linear"
+
+
+data:
+  data_root: "/data2/wyxuan/DataSet"
+  session: 1
+  channels_sel: [9,10,11,12,13,14,17,18,19,20,21,22,
+                 44,45,46,49,50,51,54,55,56,57,58,59,25,26,30,63,62,27,29,64]
+  highpass: 0.5
+  lowpass: 5.0
+  filter_order: 4
+
+  time_shift: 0.0             # in seconds (testing 0.0:0.02:1)
+  spatial_shuffle_p: 0.0     # (testing 0.0:0.25:1.0)
+
+  riemann_align_train: false
+  riemann_align_test: false
+
+training:
+  epochs: 100
+  batch_size: 256
+  val_n_subjects: 10
+  patience: 10
+  domain_loss_weight: 0.02
+  lambda_weight: 0.05
+  subject_loss_weight: 0.5
+
+  # optimizer:
+  #   name: "SGD"
+  #   params:
+  #     lr: 0.001
+  #     momentum: 0.9
+  #     weight_decay: 0.0001
+
+  optimizer:
+    name: "AdamW"
+    params:
+      lr: 0.001
+      weight_decay: 0.001
+
+tsne:
+  enable: true
+  subjects: [1,2,3,4,5,6,7,8,9,10,
+             11,12,13,14,15,16,17,18,19,20,
+             21,22,23,24,25,26,27,28,29,30]  # optional; omit to use test_ids
+
+device: "cuda:1" 

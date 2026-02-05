@@ -1,0 +1,13 @@
+data:
+  data_root: "D:/14-AORIonline/DataSet"
+  session: 1
+  channels_sel: [9,10,11,12,13,14,17,18,19,20,21,22,
+                  44,45,46,49,50,51,54,55,56,57,58,59,25,26,30,63,62,27,29,64]
+  highpass: 0.5
+  lowpass: 5.0
+  filter_order: 4
+
+params:
+  fs: 128
+  freq_vec: [1.0, 1.2, 1.4, 1.6]
+  harmonic: 2

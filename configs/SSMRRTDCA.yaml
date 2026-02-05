@@ -1,0 +1,23 @@
+
+data:
+  data_root: "/data2/wyxuan/DataSet"
+  session: 1
+  channels_sel: [9,10,11,12,13,14,17,18,19,20,21,22,
+                  44,45,46,49,50,51,54,55,56,57,58,59,25,26,30,63,62,27,29,64]
+  # channels_sel: [9,10,11,12,13,14,17,18,19,20,21,22,
+  #               44,45,46,49,50,51,54,55,56,57,58,59]   
+  # channels_sel: [25,26,30,63,62,27,29,64]             
+  highpass: 0.5
+  lowpass: 5.0
+  filter_order: 4
+  riemann_align_train: false
+  riemann_align_test: false
+
+params:
+  fs: 128
+  subspace_num: 10
+  delay_num: 2
+  freq_vec: [1.0, 1.2, 1.4, 1.6]
+  harmonic: 2
+
+
