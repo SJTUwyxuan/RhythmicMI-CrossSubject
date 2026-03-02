@@ -11,7 +11,7 @@ model:
 
     use_imag: true
     use_chancomb: true
-    head_type: "linear"
+    head_type: "mlp"
 
 
 data:

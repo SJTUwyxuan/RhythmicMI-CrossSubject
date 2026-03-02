@@ -146,9 +146,6 @@ def _plot_tsne_by_class(Z: np.ndarray, Y: np.ndarray, title: str, out_png: str):
     plt.xlabel("t-SNE-1")
     plt.ylabel("t-SNE-2")
 
-    # Optional: remove tick labels
-    # plt.xticks([]); plt.yticks([])
-
     plt.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), frameon=True)
     plt.tight_layout(rect=[0, 0, 0.82, 1])
     plt.savefig(out_png, dpi=200)
@@ -165,39 +162,83 @@ def _collect_labels_only(per_subj, subject_ids, bs):
     return torch.cat(Ys, dim=0).numpy() if len(Ys) > 0 else None
 
 
+def _find_last_linear(module: nn.Module):
+    """Find the last nn.Linear inside a module (prefer Sequential order if exists)."""
+    if module is None:
+        return None
+    if isinstance(module, nn.Sequential):
+        for m in reversed(list(module)):
+            if isinstance(m, nn.Linear):
+                return m
+            if isinstance(m, nn.Sequential):
+                mm = _find_last_linear(m)
+                if mm is not None:
+                    return mm
+    linears = [m for m in module.modules() if isinstance(m, nn.Linear)]
+    return linears[-1] if len(linears) > 0 else None
+
+
 def run_tsne_freqmlp_multilayer(model, per_subj, subject_ids, conf, out_prefix):
     """
-    FreqMLP: save 4 layers (after_rfft, after_chancomb, head_fc1, logits).
+    FreqMLP: save 4 nodes:
+      1) input (raw time-domain),
+      2) after_fft (one-sided spectrum; keep real or real+imag depending on model; apply freq_idx if exists),
+      3) after_chancomb (output of channel-combination module; if disabled, fallback to after_fft),
+      4) pre_logits embedding (input to the final classification Linear layer).
     Only class-colored plots + raw .mat.
     """
     device = conf.get('device', 'cpu')
     bs = conf['training']['batch_size']
 
-    # Hook layers for FreqMLP-like structure
-    hook_layers = {}
-    if hasattr(model, "chancomb"):
-        hook_layers["after_chancomb"] = model.chancomb
-    if hasattr(model, "head") and hasattr(model.head, "net"):
-        hook_layers["head_fc1"] = model.head.net[0]
-        hook_layers["logits"] = model.head.net[-1]
-
-    if len(hook_layers) == 0:
-        print("[t-SNE] FreqMLP multilayer: no supported layers found. Skip.")
-        return
-
-    acts = {k: [] for k in hook_layers.keys()}
+    # ----------------- prepare hooks -----------------
+    acts_out = {}   # store outputs (e.g., after_chancomb)
+    acts_inp = {}   # store inputs (e.g., pre_logits)
     handles = []
 
-    def _hook(name):
-        def fn(module, inp, out):
-            acts[name].append(out.detach().cpu())
-        return fn
+    # (3) after_chancomb: output of model.chancomb if present
+    has_chancomb = hasattr(model, "chancomb") and (getattr(model, "chancomb") is not None)
+    if has_chancomb:
+        acts_out["after_chancomb"] = []
 
-    for name, layer in hook_layers.items():
-        handles.append(layer.register_forward_hook(_hook(name)))
+        def _hook_out(name):
+            def fn(module, inp, out):
+                acts_out[name].append(out.detach().cpu())
+            return fn
 
-    Xf_cat_list = []  # after_rfft (real+imag)
+        handles.append(model.chancomb.register_forward_hook(_hook_out("after_chancomb")))
+
+    # (4) pre_logits: input to the LAST Linear classifier
+    prelogits_layer = None
+    if hasattr(model, "head") and getattr(model, "head") is not None:
+        if hasattr(model.head, "net"):
+            prelogits_layer = _find_last_linear(model.head.net)
+        if prelogits_layer is None:
+            prelogits_layer = _find_last_linear(model.head)
+    if prelogits_layer is None:
+        prelogits_layer = _find_last_linear(model)
+
+    if prelogits_layer is None:
+        print("[t-SNE] FreqMLP multilayer: cannot find final Linear layer for pre_logits. Will skip pre_logits.")
+    else:
+        acts_inp["pre_logits"] = []
+
+        def _hook_inp(name):
+            def fn(module, inp, out):
+                if isinstance(inp, (tuple, list)) and len(inp) > 0:
+                    acts_inp[name].append(inp[0].detach().cpu())
+            return fn
+
+        handles.append(prelogits_layer.register_forward_hook(_hook_inp("pre_logits")))
+
+    # ----------------- collect data -----------------
+    input_list = []      # (1) raw input
+    Xf_feat_list = []    # (2) after_fft (real or real+imag)
     Y_list = []
+
+    # Ablation compatibility: infer whether to keep imag based on model attribute if present
+    keep_imag = True
+    if hasattr(model, "use_imag"):
+        keep_imag = bool(getattr(model, "use_imag"))
 
     model.eval()
     with torch.no_grad():
@@ -207,13 +248,21 @@ def run_tsne_freqmlp_multilayer(model, per_subj, subject_ids, conf, out_prefix):
             for x, y in loader_s:
                 x = x.to(device)
 
-                # after_rfft (explicit)
+                # (1) input (raw time-domain)
+                input_list.append(x.detach().cpu())
+
+                # (2) after_fft (explicit, aligned with model settings)
                 try:
-                    Xf = torch.fft.rfft(x, dim=-1)
+                    Xf = torch.fft.rfft(x, dim=-1)  # (B, C, F_full) complex
                     if getattr(model, "freq_idx", None) is not None:
-                        Xf = Xf[..., model.freq_idx]
-                    Xf_cat = torch.cat([Xf.real, Xf.imag], dim=1)  # (B, 2C, F)
-                    Xf_cat_list.append(Xf_cat.detach().cpu())
+                        Xf = Xf[..., model.freq_idx]  # keep band of interest
+
+                    if keep_imag:
+                        Xf_feat = torch.cat([Xf.real, Xf.imag], dim=1)  # (B, 2C, F)
+                    else:
+                        Xf_feat = Xf.real  # (B, C, F)
+
+                    Xf_feat_list.append(Xf_feat.detach().cpu())
                 except Exception:
                     pass
 
@@ -230,23 +279,47 @@ def run_tsne_freqmlp_multilayer(model, per_subj, subject_ids, conf, out_prefix):
     Y = torch.cat(Y_list, dim=0).numpy()
 
     feats = {}
-    if len(Xf_cat_list) > 0:
-        feats["after_rfft"] = torch.cat(Xf_cat_list, dim=0)
 
-    for k in acts.keys():
-        feats[k] = torch.cat(acts[k], dim=0)
+    # Assemble (1) input
+    if len(input_list) > 0:
+        feats["input"] = torch.cat(input_list, dim=0)
 
-    def to_vec(t):
-        # (N, C, F) -> (N, C) for stability
+    # Assemble (2) after_fft
+    if len(Xf_feat_list) > 0:
+        feats["after_fft"] = torch.cat(Xf_feat_list, dim=0)
+
+    # Assemble (3) after_chancomb
+    if "after_chancomb" in acts_out and len(acts_out["after_chancomb"]) > 0:
+        feats["after_chancomb"] = torch.cat(acts_out["after_chancomb"], dim=0)
+    else:
+        # If chancomb is disabled/absent, use after_fft as a consistent placeholder
+        if "after_fft" in feats:
+            feats["after_chancomb"] = feats["after_fft"]
+
+    # Assemble (4) pre_logits
+    if "pre_logits" in acts_inp and len(acts_inp["pre_logits"]) > 0:
+        feats["pre_logits"] = torch.cat(acts_inp["pre_logits"], dim=0)
+
+    if len(feats) == 0:
+        print("[t-SNE] FreqMLP multilayer: no features collected. Skip.")
+        return
+
+    def to_vec(t: torch.Tensor) -> np.ndarray:
+        """
+        - For 3D tensors (N, C, T/F): average over the last dimension -> (N, C)
+        - For 2D tensors (N, D): keep as is
+        - For >3D: flatten except batch
+        """
         if t.ndim == 3:
             t = t.mean(dim=-1)
+        elif t.ndim > 3:
+            t = t.view(t.shape[0], -1)
         return t.numpy()
 
     for name, t in feats.items():
         X = to_vec(t)
         Z = _pca_tsne(X, perplexity=30, seed=0)
 
-        # Save raw for MATLAB
         mat_path = f"{out_prefix}_tsne_{name}.mat"
         savemat(mat_path, {
             "Z": Z.astype(np.float32),
@@ -255,7 +328,6 @@ def run_tsne_freqmlp_multilayer(model, per_subj, subject_ids, conf, out_prefix):
         })
         print(f"[t-SNE] Saved raw: {mat_path}")
 
-        # Save plot
         png_path = f"{out_prefix}_tsne_{name}_byClass.png"
         _plot_tsne_by_class(Z, Y, f"t-SNE ({name})", png_path)
 
