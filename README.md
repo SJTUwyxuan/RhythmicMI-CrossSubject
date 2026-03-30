@@ -2,7 +2,7 @@ This repository contains code and baseline implementations related to our study 
 
 ## Overview
 
-In this work, we mainly investigate **how data influences cross-subject decoding performance** in EEG-based brain-computer interfaces (BCIs), rather than focusing only on increasingly complex model architectures.
+In this work, we mainly investigate **how data influences cross-subject decoding performance** in EEG-based BCI, rather than focusing only on increasingly complex model architectures.
 
 Our findings suggest that very simple MLP-based networks can achieve results comparable to, or even better than, more sophisticated models on our proposed rhythmic MI paradigm. These results highlight the joint importance of **model design** and **data characteristics** in achieving robust cross-subject generalization.
 
