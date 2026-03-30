@@ -30,7 +30,7 @@ This repository currently provides:
 
 While many previous studies have focused primarily on designing more advanced neural architectures, our results suggest that:
 
-- **simple models can already be highly competitive** under suitable data conditions,
+- **simple models can be highly competitive** under suitable data conditions,
 - **dataset scale and data characteristics** may play a central role in cross-subject generalization,
 - and future improvements may come not only from better models, but also from better **data construction, curation, and quality control**.
 
