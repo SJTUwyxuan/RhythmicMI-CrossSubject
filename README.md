@@ -15,7 +15,9 @@ The self-collected rhythmic MI dataset used in this work is **still under constr
 Nevertheless, we hope that the ideas, experimental framework, and baseline implementations provided here can still offer useful insights to the field and support future related research.
 
 Also, if you are interested in conducting Rhythmic MI experiment your self (offline / online), there are more details in the following articles:
+
 [1] Wei, Y., Meng, J., Luo, R., Mai, X., Li, S., Xia, Y., & Zhu, X. (2024). Action observation with rhythm imagery (AORI): a novel paradigm to activate motor-related pattern for high-performance motor decoding. IEEE Transactions on Biomedical Engineering, 72(3), 1085-1096.
+
 [2] Wei, Y., Luo, R., Xia, Y., Mai, X., Zhu, X., & Meng, J. (2026). Rhythmic Motor Imagery Boosts Accuracy and Efficiency in Noninvasive Brain-Computer Interfaces. IEEE Journal of Biomedical and Health Informatics.
 
 Please feel free to contact me if you have any questions about the experiment.
